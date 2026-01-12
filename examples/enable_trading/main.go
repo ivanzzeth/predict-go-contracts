@@ -11,9 +11,15 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ivanzzeth/ethsig"
 	predictcontracts "github.com/ivanzzeth/predict-go-contracts"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found, using system environment variables")
+	}
+
 	// Use BNB mainnet
 	bnbChainID := big.NewInt(56)
 
@@ -48,15 +54,15 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	log.Println("\n=== Enabling Trading for EOA ===")
+	log.Println("\n=== Enabling Trading for EOA (YB + NYB contracts) ===")
 
-	// Enable trading for EOA
+	// Enable trading for EOA on both Yield Bearing and Non Yield Bearing contracts
 	txHashes, err := predictInterface.EnableTrading(ctx)
 	if err != nil {
 		log.Fatalf("Failed to enable trading: %v", err)
 	}
 
-	log.Println("\n Trading successfully enabled for EOA!")
+	log.Println("\n Trading successfully enabled for EOA on both YB and NYB contracts!")
 	log.Printf("EOA Address: %s", address.Hex())
 	log.Printf("Transaction hashes:")
 	for i, txHash := range txHashes {

@@ -267,64 +267,101 @@ func (b *ContractInterface) PrintBalanceAndAllowance(ctx context.Context, addres
 	return nil
 }
 
-// EnableTrading enables trading for the EOA
+// EnableTrading enables trading for the EOA on both YB and NYB contracts
 func (b *ContractInterface) EnableTrading(ctx context.Context) ([]common.Hash, error) {
 	if b.eoaTradingSigner == nil {
 		return nil, fmt.Errorf("EOA trading signer not set")
 	}
-	return b.EnableTradingForEOA(ctx, b.eoaTradingSigner)
+
+	var allTxHashes []common.Hash
+
+	// Enable trading for Non Yield Bearing contracts
+	fmt.Println("Enabling trading for Non Yield Bearing (NYB) contracts...")
+	nybTxHashes, err := b.enableTradingForContracts(ctx,
+		b.contractConfig.ConditionalTokens,
+		b.contractConfig.Exchange,
+		b.contractConfig.NegRiskAdapter,
+		b.contractConfig.NegRiskExchange,
+	)
+	if err != nil {
+		return allTxHashes, fmt.Errorf("failed to enable trading for NYB contracts: %w", err)
+	}
+	allTxHashes = append(allTxHashes, nybTxHashes...)
+
+	// Enable trading for Yield Bearing contracts
+	fmt.Println("Enabling trading for Yield Bearing (YB) contracts...")
+	ybTxHashes, err := b.enableTradingForContracts(ctx,
+		b.contractConfig.YieldBearingConditionalTokens,
+		b.contractConfig.YieldBearingExchange,
+		b.contractConfig.YieldBearingNegRiskAdapter,
+		b.contractConfig.YieldBearingNegRiskExchange,
+	)
+	if err != nil {
+		return allTxHashes, fmt.Errorf("failed to enable trading for YB contracts: %w", err)
+	}
+	allTxHashes = append(allTxHashes, ybTxHashes...)
+
+	return allTxHashes, nil
 }
 
 // Redeem redeems conditional tokens for a resolved market
-func (b *ContractInterface) Redeem(ctx context.Context, conditionId [32]byte) (common.Hash, error) {
+// ctfAddress: the ConditionalTokens contract address (use YieldBearingConditionalTokens or ConditionalTokens based on market type)
+func (b *ContractInterface) Redeem(ctx context.Context, ctfAddress common.Address, conditionId [32]byte) (common.Hash, error) {
 	// For binary markets, indexSets is always [1, 2] representing Yes/No outcomes
 	indexSets := []*big.Int{big.NewInt(1), big.NewInt(2)}
-	return b.RedeemPositionsForEOA(ctx, b.eoaTradingSigner, conditionId, indexSets)
+	return b.RedeemPositionsForEOA(ctx, ctfAddress, conditionId, indexSets)
 }
 
 // RedeemNegRisk redeems NegRisk market positions
-func (b *ContractInterface) RedeemNegRisk(ctx context.Context, conditionId [32]byte, amounts []*big.Int) (common.Hash, error) {
-	return b.RedeemPositionsNegRiskForEOA(ctx, b.eoaTradingSigner, conditionId, amounts)
+// negRiskAdapterAddress: the NegRiskAdapter contract address (use YieldBearingNegRiskAdapter or NegRiskAdapter based on market type)
+func (b *ContractInterface) RedeemNegRisk(ctx context.Context, negRiskAdapterAddress common.Address, conditionId [32]byte, amounts []*big.Int) (common.Hash, error) {
+	return b.RedeemPositionsNegRiskForEOA(ctx, negRiskAdapterAddress, conditionId, amounts)
 }
 
 // Split splits collateral into conditional tokens
-func (b *ContractInterface) Split(ctx context.Context, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
+// ctfAddress: the ConditionalTokens contract address (use YieldBearingConditionalTokens or ConditionalTokens based on market type)
+func (b *ContractInterface) Split(ctx context.Context, ctfAddress common.Address, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
 	// For binary markets, partition is always [1, 2] representing Yes/No outcomes
 	partition := []*big.Int{big.NewInt(1), big.NewInt(2)}
-	return b.SplitPositionForEOA(ctx, b.eoaTradingSigner, conditionId, partition, amount)
+	return b.SplitPositionForEOA(ctx, ctfAddress, conditionId, partition, amount)
 }
 
 // Merge merges conditional tokens back into collateral
-func (b *ContractInterface) Merge(ctx context.Context, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
+// ctfAddress: the ConditionalTokens contract address (use YieldBearingConditionalTokens or ConditionalTokens based on market type)
+func (b *ContractInterface) Merge(ctx context.Context, ctfAddress common.Address, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
 	// For binary markets, partition is always [1, 2] representing Yes/No outcomes
 	partition := []*big.Int{big.NewInt(1), big.NewInt(2)}
-	return b.MergePositionsForEOA(ctx, b.eoaTradingSigner, conditionId, partition, amount)
+	return b.MergePositionsForEOA(ctx, ctfAddress, conditionId, partition, amount)
 }
 
 // SplitNegRisk splits collateral into NegRisk conditional tokens
-func (b *ContractInterface) SplitNegRisk(ctx context.Context, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
-	return b.SplitPositionNegRiskForEOA(ctx, b.eoaTradingSigner, conditionId, amount)
+// negRiskAdapterAddress: the NegRiskAdapter contract address (use YieldBearingNegRiskAdapter or NegRiskAdapter based on market type)
+func (b *ContractInterface) SplitNegRisk(ctx context.Context, negRiskAdapterAddress common.Address, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
+	return b.SplitPositionNegRiskForEOA(ctx, negRiskAdapterAddress, conditionId, amount)
 }
 
 // MergeNegRisk merges NegRisk conditional tokens back into collateral
-func (b *ContractInterface) MergeNegRisk(ctx context.Context, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
-	return b.MergePositionsNegRiskForEOA(ctx, b.eoaTradingSigner, conditionId, amount)
+// negRiskAdapterAddress: the NegRiskAdapter contract address (use YieldBearingNegRiskAdapter or NegRiskAdapter based on market type)
+func (b *ContractInterface) MergeNegRisk(ctx context.Context, negRiskAdapterAddress common.Address, conditionId [32]byte, amount *big.Int) (common.Hash, error) {
+	return b.MergePositionsNegRiskForEOA(ctx, negRiskAdapterAddress, conditionId, amount)
 }
 
-// EnableTradingForEOA enables trading for an EOA wallet
-func (b *ContractInterface) EnableTradingForEOA(
+// enableTradingForContracts is an internal helper that enables trading for a specific set of contracts
+// ctfAddress: ConditionalTokens contract (YB or NYB)
+// exchangeAddress: Exchange contract
+// negRiskAdapterAddress: NegRiskAdapter contract
+// negRiskExchangeAddress: NegRiskExchange contract
+func (b *ContractInterface) enableTradingForContracts(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	ctfAddress common.Address,
+	exchangeAddress common.Address,
+	negRiskAdapterAddress common.Address,
+	negRiskExchangeAddress common.Address,
 ) ([]common.Hash, error) {
 	var txHashes []common.Hash
 
-	eoaAddr := eoaSigner.GetAddress()
-
-	// Check current status
-	info, err := b.CheckBalanceAndAllowance(ctx, eoaAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check balance and allowance: %w", err)
-	}
+	eoaAddr := b.eoaTradingSigner.GetAddress()
+	callOpts := &bind.CallOpts{Context: ctx}
 
 	// Maximum allowance for ERC20 approvals
 	maxAllowance := new(big.Int)
@@ -336,15 +373,19 @@ func (b *ContractInterface) EnableTradingForEOA(
 		return nil, fmt.Errorf("failed to parse ERC20 ABI: %w", err)
 	}
 
-	// Parse ConditionalTokens ABI for setApprovalForAll function
+	// Parse ConditionalTokens ABI for setApprovalForAll and isApprovedForAll
 	ctfABI, err := abi.JSON(strings.NewReader(conditional_tokens.ConditionalTokensMetaData.ABI))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ConditionalTokens ABI: %w", err)
 	}
 
-	// Approve collateral for all contracts if needed
-	if info.AllowanceExchange.Cmp(big.NewInt(0)) == 0 {
-		approveData, err := erc20ABI.Pack("approve", b.contractConfig.Exchange, maxAllowance)
+	// Check and approve collateral for Exchange
+	allowanceExchange, err := b.collateralContract.Allowance(callOpts, eoaAddr, exchangeAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collateral allowance for Exchange: %w", err)
+	}
+	if allowanceExchange.Cmp(big.NewInt(0)) == 0 {
+		approveData, err := erc20ABI.Pack("approve", exchangeAddress, maxAllowance)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pack approve data for Exchange: %w", err)
 		}
@@ -352,11 +393,19 @@ func (b *ContractInterface) EnableTradingForEOA(
 		if err != nil {
 			return nil, fmt.Errorf("failed to send Collateral → Exchange approval transaction: %w", err)
 		}
+		fmt.Printf("  Collateral → Exchange: %s\n", txHash.Hex())
 		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  Collateral → Exchange: already approved\n")
 	}
 
-	if info.AllowanceNegRiskAdapter.Cmp(big.NewInt(0)) == 0 {
-		approveData, err := erc20ABI.Pack("approve", b.contractConfig.NegRiskAdapter, maxAllowance)
+	// Check and approve collateral for NegRiskAdapter
+	allowanceNegRiskAdapter, err := b.collateralContract.Allowance(callOpts, eoaAddr, negRiskAdapterAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collateral allowance for NegRiskAdapter: %w", err)
+	}
+	if allowanceNegRiskAdapter.Cmp(big.NewInt(0)) == 0 {
+		approveData, err := erc20ABI.Pack("approve", negRiskAdapterAddress, maxAllowance)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pack approve data for NegRiskAdapter: %w", err)
 		}
@@ -364,11 +413,19 @@ func (b *ContractInterface) EnableTradingForEOA(
 		if err != nil {
 			return nil, fmt.Errorf("failed to send Collateral → NegRiskAdapter approval transaction: %w", err)
 		}
+		fmt.Printf("  Collateral → NegRiskAdapter: %s\n", txHash.Hex())
 		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  Collateral → NegRiskAdapter: already approved\n")
 	}
 
-	if info.AllowanceNegRiskExchange.Cmp(big.NewInt(0)) == 0 {
-		approveData, err := erc20ABI.Pack("approve", b.contractConfig.NegRiskExchange, maxAllowance)
+	// Check and approve collateral for NegRiskExchange
+	allowanceNegRiskExchange, err := b.collateralContract.Allowance(callOpts, eoaAddr, negRiskExchangeAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collateral allowance for NegRiskExchange: %w", err)
+	}
+	if allowanceNegRiskExchange.Cmp(big.NewInt(0)) == 0 {
+		approveData, err := erc20ABI.Pack("approve", negRiskExchangeAddress, maxAllowance)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pack approve data for NegRiskExchange: %w", err)
 		}
@@ -376,53 +433,86 @@ func (b *ContractInterface) EnableTradingForEOA(
 		if err != nil {
 			return nil, fmt.Errorf("failed to send Collateral → NegRiskExchange approval transaction: %w", err)
 		}
+		fmt.Printf("  Collateral → NegRiskExchange: %s\n", txHash.Hex())
 		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  Collateral → NegRiskExchange: already approved\n")
 	}
 
-	// Approve CTF for all contracts if needed
-	if !info.CTFApprovedExchange {
-		setApprovalData, err := ctfABI.Pack("setApprovalForAll", b.contractConfig.Exchange, true)
+	// Create a temporary CTF contract instance to check approvals
+	ctfContract, err := conditional_tokens.NewConditionalTokens(ctfAddress, b.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CTF contract instance: %w", err)
+	}
+
+	// Check and approve CTF for Exchange
+	ctfApprovedExchange, err := ctfContract.IsApprovedForAll(callOpts, eoaAddr, exchangeAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check CTF approval for Exchange: %w", err)
+	}
+	if !ctfApprovedExchange {
+		setApprovalData, err := ctfABI.Pack("setApprovalForAll", exchangeAddress, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pack setApprovalForAll data for Exchange: %w", err)
 		}
-		txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.ConditionalTokens, setApprovalData, big.NewInt(0))
+		txHash, err := b.txSender.SendEthereumTransaction(ctfAddress, setApprovalData, big.NewInt(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to send CTF → Exchange approval transaction: %w", err)
 		}
+		fmt.Printf("  CTF → Exchange: %s\n", txHash.Hex())
 		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  CTF → Exchange: already approved\n")
 	}
 
-	if !info.CTFApprovedNegRiskAdapter {
-		setApprovalData, err := ctfABI.Pack("setApprovalForAll", b.contractConfig.NegRiskAdapter, true)
+	// Check and approve CTF for NegRiskAdapter
+	ctfApprovedNegRiskAdapter, err := ctfContract.IsApprovedForAll(callOpts, eoaAddr, negRiskAdapterAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check CTF approval for NegRiskAdapter: %w", err)
+	}
+	if !ctfApprovedNegRiskAdapter {
+		setApprovalData, err := ctfABI.Pack("setApprovalForAll", negRiskAdapterAddress, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pack setApprovalForAll data for NegRiskAdapter: %w", err)
 		}
-		txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.ConditionalTokens, setApprovalData, big.NewInt(0))
+		txHash, err := b.txSender.SendEthereumTransaction(ctfAddress, setApprovalData, big.NewInt(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to send CTF → NegRiskAdapter approval transaction: %w", err)
 		}
+		fmt.Printf("  CTF → NegRiskAdapter: %s\n", txHash.Hex())
 		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  CTF → NegRiskAdapter: already approved\n")
 	}
 
-	if !info.CTFApprovedNegRiskExchange {
-		setApprovalData, err := ctfABI.Pack("setApprovalForAll", b.contractConfig.NegRiskExchange, true)
+	// Check and approve CTF for NegRiskExchange
+	ctfApprovedNegRiskExchange, err := ctfContract.IsApprovedForAll(callOpts, eoaAddr, negRiskExchangeAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check CTF approval for NegRiskExchange: %w", err)
+	}
+	if !ctfApprovedNegRiskExchange {
+		setApprovalData, err := ctfABI.Pack("setApprovalForAll", negRiskExchangeAddress, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to pack setApprovalForAll data for NegRiskExchange: %w", err)
 		}
-		txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.ConditionalTokens, setApprovalData, big.NewInt(0))
+		txHash, err := b.txSender.SendEthereumTransaction(ctfAddress, setApprovalData, big.NewInt(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to send CTF → NegRiskExchange approval transaction: %w", err)
 		}
+		fmt.Printf("  CTF → NegRiskExchange: %s\n", txHash.Hex())
 		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  CTF → NegRiskExchange: already approved\n")
 	}
 
 	return txHashes, nil
 }
 
 // RedeemPositionsForEOA redeems conditional tokens for a resolved market using EOA
+// ctfAddress: the ConditionalTokens contract address to call
 func (b *ContractInterface) RedeemPositionsForEOA(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	ctfAddress common.Address,
 	conditionId [32]byte,
 	indexSets []*big.Int,
 ) (common.Hash, error) {
@@ -438,7 +528,7 @@ func (b *ContractInterface) RedeemPositionsForEOA(
 	}
 
 	// Send transaction
-	txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.ConditionalTokens, calldata, big.NewInt(0))
+	txHash, err := b.txSender.SendEthereumTransaction(ctfAddress, calldata, big.NewInt(0))
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to send redeem transaction: %w", err)
 	}
@@ -447,9 +537,10 @@ func (b *ContractInterface) RedeemPositionsForEOA(
 }
 
 // RedeemPositionsNegRiskForEOA redeems NegRisk market positions using EOA
+// negRiskAdapterAddress: the NegRiskAdapter contract address to call
 func (b *ContractInterface) RedeemPositionsNegRiskForEOA(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	negRiskAdapterAddress common.Address,
 	conditionId [32]byte,
 	amounts []*big.Int,
 ) (common.Hash, error) {
@@ -464,7 +555,7 @@ func (b *ContractInterface) RedeemPositionsNegRiskForEOA(
 	}
 
 	// Send transaction
-	txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.NegRiskAdapter, calldata, big.NewInt(0))
+	txHash, err := b.txSender.SendEthereumTransaction(negRiskAdapterAddress, calldata, big.NewInt(0))
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to send NegRisk redeem transaction: %w", err)
 	}
@@ -473,9 +564,10 @@ func (b *ContractInterface) RedeemPositionsNegRiskForEOA(
 }
 
 // SplitPositionForEOA splits collateral into conditional tokens for an EOA wallet
+// ctfAddress: the ConditionalTokens contract address to call
 func (b *ContractInterface) SplitPositionForEOA(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	ctfAddress common.Address,
 	conditionId [32]byte,
 	partition []*big.Int,
 	amount *big.Int,
@@ -492,7 +584,7 @@ func (b *ContractInterface) SplitPositionForEOA(
 	}
 
 	// Send transaction
-	txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.ConditionalTokens, calldata, big.NewInt(0))
+	txHash, err := b.txSender.SendEthereumTransaction(ctfAddress, calldata, big.NewInt(0))
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to send split transaction: %w", err)
 	}
@@ -501,9 +593,10 @@ func (b *ContractInterface) SplitPositionForEOA(
 }
 
 // MergePositionsForEOA merges conditional tokens back into collateral for an EOA wallet
+// ctfAddress: the ConditionalTokens contract address to call
 func (b *ContractInterface) MergePositionsForEOA(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	ctfAddress common.Address,
 	conditionId [32]byte,
 	partition []*big.Int,
 	amount *big.Int,
@@ -520,7 +613,7 @@ func (b *ContractInterface) MergePositionsForEOA(
 	}
 
 	// Send transaction
-	txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.ConditionalTokens, calldata, big.NewInt(0))
+	txHash, err := b.txSender.SendEthereumTransaction(ctfAddress, calldata, big.NewInt(0))
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to send merge transaction: %w", err)
 	}
@@ -529,9 +622,10 @@ func (b *ContractInterface) MergePositionsForEOA(
 }
 
 // SplitPositionNegRiskForEOA splits collateral into NegRisk conditional tokens for an EOA wallet
+// negRiskAdapterAddress: the NegRiskAdapter contract address to call
 func (b *ContractInterface) SplitPositionNegRiskForEOA(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	negRiskAdapterAddress common.Address,
 	conditionId [32]byte,
 	amount *big.Int,
 ) (common.Hash, error) {
@@ -546,7 +640,7 @@ func (b *ContractInterface) SplitPositionNegRiskForEOA(
 	}
 
 	// Send transaction
-	txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.NegRiskAdapter, calldata, big.NewInt(0))
+	txHash, err := b.txSender.SendEthereumTransaction(negRiskAdapterAddress, calldata, big.NewInt(0))
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to send NegRisk split transaction: %w", err)
 	}
@@ -555,9 +649,10 @@ func (b *ContractInterface) SplitPositionNegRiskForEOA(
 }
 
 // MergePositionsNegRiskForEOA merges NegRisk conditional tokens back into collateral for an EOA wallet
+// negRiskAdapterAddress: the NegRiskAdapter contract address to call
 func (b *ContractInterface) MergePositionsNegRiskForEOA(
 	ctx context.Context,
-	eoaSigner signer.EOATradingSigner,
+	negRiskAdapterAddress common.Address,
 	conditionId [32]byte,
 	amount *big.Int,
 ) (common.Hash, error) {
@@ -572,7 +667,7 @@ func (b *ContractInterface) MergePositionsNegRiskForEOA(
 	}
 
 	// Send transaction
-	txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.NegRiskAdapter, calldata, big.NewInt(0))
+	txHash, err := b.txSender.SendEthereumTransaction(negRiskAdapterAddress, calldata, big.NewInt(0))
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to send NegRisk merge transaction: %w", err)
 	}
