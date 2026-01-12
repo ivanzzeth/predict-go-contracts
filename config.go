@@ -7,12 +7,25 @@ import (
 )
 
 // ContractConfig holds all contract addresses for Predict platform
+//
+// IMPORTANT: ConditionalTokens Access Control
+// The ConditionalTokens contract has role-based access control for split/merge operations.
+// When the access control switch is enabled, only addresses with SPLITTER_ROLE or MERGER_ROLE
+// can perform splitPosition/mergePositions operations. This is a security feature but may
+// cause transaction failures if your address doesn't have the required role.
+// Check contract's accessControlEnabled() and hasRole() before calling split/merge functions.
 type ContractConfig struct {
 	// Common
 	Collateral common.Address // USDT on BNB
 
 	// Yield Bearing Prediction Market
-	YieldBearingConditionalTokens        common.Address
+	// YieldBearingConditionalTokens is fully compatible with ConditionalTokens, but automatically
+	// starts earning yield when splitPosition is called, solving the idle capital problem in
+	// traditional prediction markets. The collateral is deposited into Venus protocol to earn yield.
+	// NOTE: YieldBearingConditionalTokens and YieldBearingNegRiskConditionalTokens have
+	// split/merge role-based access control (SPLIT_POSITION_ROLE, MERGE_POSITIONS_ROLE).
+	// Check isSplitPositionGated()/isMergePositionsGated() and ensure your address has the required role.
+	YieldBearingConditionalTokens common.Address
 	YieldBearingCtfAdapter               common.Address
 	YieldBearingExchange                 common.Address
 	YieldBearingNegRiskConditionalTokens common.Address
@@ -27,7 +40,9 @@ type ContractConfig struct {
 	YieldBearingRegisterTokenHelper      common.Address
 
 	// Non Yield Bearing Prediction Market
-	ConditionalTokens        common.Address
+	// NOTE: ConditionalTokens and NegRiskConditionalTokens have split/merge role-based
+	// access control. Ensure your address has the required role when access control is enabled.
+	ConditionalTokens common.Address
 	CtfAdapter               common.Address
 	Exchange                 common.Address
 	NegRiskConditionalTokens common.Address
