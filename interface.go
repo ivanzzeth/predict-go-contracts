@@ -439,6 +439,26 @@ func (b *ContractInterface) enableTradingForContracts(
 		fmt.Printf("  Collateral → NegRiskExchange: already approved\n")
 	}
 
+	// Check and approve collateral for ConditionalTokens (CTF) - required for splitPosition
+	allowanceCTF, err := b.collateralContract.Allowance(callOpts, eoaAddr, ctfAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collateral allowance for CTF: %w", err)
+	}
+	if allowanceCTF.Cmp(big.NewInt(0)) == 0 {
+		approveData, err := erc20ABI.Pack("approve", ctfAddress, maxAllowance)
+		if err != nil {
+			return nil, fmt.Errorf("failed to pack approve data for CTF: %w", err)
+		}
+		txHash, err := b.txSender.SendEthereumTransaction(b.contractConfig.Collateral, approveData, big.NewInt(0))
+		if err != nil {
+			return nil, fmt.Errorf("failed to send Collateral → CTF approval transaction: %w", err)
+		}
+		fmt.Printf("  Collateral → CTF: %s\n", txHash.Hex())
+		txHashes = append(txHashes, txHash)
+	} else {
+		fmt.Printf("  Collateral → CTF: already approved\n")
+	}
+
 	// Create a temporary CTF contract instance to check approvals
 	ctfContract, err := conditional_tokens.NewConditionalTokens(ctfAddress, b.client)
 	if err != nil {
@@ -634,7 +654,7 @@ func (b *ContractInterface) SplitPositionNegRiskForEOA(
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to parse NegRiskAdapter ABI: %w", err)
 	}
-	calldata, err := parsedABI.Pack("splitPosition", conditionId, amount)
+	calldata, err := parsedABI.Pack("splitPosition0", conditionId, amount)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to pack splitPosition calldata: %w", err)
 	}
@@ -661,7 +681,7 @@ func (b *ContractInterface) MergePositionsNegRiskForEOA(
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to parse NegRiskAdapter ABI: %w", err)
 	}
-	calldata, err := parsedABI.Pack("mergePositions", conditionId, amount)
+	calldata, err := parsedABI.Pack("mergePositions0", conditionId, amount)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to pack mergePositions calldata: %w", err)
 	}
