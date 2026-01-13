@@ -1,13 +1,11 @@
-# Polymarket Go Contracts
+# Predict Go Contracts
 
-A Go library for interacting with Polymarket smart contracts on Polygon network. This library provides a convenient interface for trading on Polymarket using both EOA (Externally Owned Account) and Gnosis Safe wallets.
+A Go library for interacting with Predict.fun smart contracts on BNB Chain. This library provides a convenient interface for trading on Predict.fun using EOA (Externally Owned Account) wallets.
 
 ## Features
 
-- 🔐 Support for both EOA and Gnosis Safe signers
+- 🔐 Support for EOA signers
 - 🔄 Complete trading operations (enable trading, split, merge, redeem)
-- 🏭 Safe deployment and management
-- 🔌 MPC wallet integration (Cobo MPC)
 - ⚡ Built on go-ethereum
 - 🚀 Enhanced transaction inclusion speed (1.3x gas price multiplier)
 
@@ -21,7 +19,7 @@ go get github.com/ivanzzeth/predict-go-contracts
 
 ### EOA Signer (Direct Private Key)
 
-EOA signer allows you to interact with Polymarket directly using a private key. This is the simplest approach for individual accounts.
+EOA signer allows you to interact with Predict.fun directly using a private key. This is the simplest approach for individual accounts.
 
 ```go
 package main
@@ -30,11 +28,11 @@ import (
     "github.com/ethereum/go-ethereum/crypto"
     "github.com/ethereum/go-ethereum/ethclient"
     "github.com/ivanzzeth/ethsig"
-    polymarketcontracts "github.com/ivanzzeth/predict-go-contracts"
+    predictcontracts "github.com/ivanzzeth/predict-go-contracts"
 )
 
 func main() {
-    // Connect to Polygon RPC
+    // Connect to BNB Chain RPC
     client, _ := ethclient.Dial(os.Getenv("RPC_URL"))
 
     // Load private key
@@ -44,104 +42,29 @@ func main() {
     eoaSigner := ethsig.NewEthPrivateKeySigner(privateKey)
 
     // Initialize contract interface
-    config := polymarketcontracts.GetContractConfig(big.NewInt(137)) // Polygon mainnet
-    polymarketInterface, _ := polymarketcontracts.NewContractInterface(
+    config := predictcontracts.GetContractConfig(big.NewInt(56)) // BNB Chain mainnet
+    predictInterface, _ := predictcontracts.NewContractInterface(
         client,
-        polymarketcontracts.WithContractConfig(config),
-        polymarketcontracts.WithEOASigner(eoaSigner),
+        predictcontracts.WithContractConfig(config),
+        predictcontracts.WithEOASigner(eoaSigner),
     )
 
     // Enable trading
     ctx := context.Background()
-    txHashes, _ := polymarketInterface.EnableTrading(ctx)
+    txHashes, _ := predictInterface.EnableTrading(ctx)
 }
 ```
-
-### Safe Signer (Gnosis Safe Single-Owner)
-
-Safe signer uses Gnosis Safe with a single owner for fund isolation and simplified protocol interaction. Transactions are signed using EIP-712 typed data signatures and executed through the Safe proxy contract.
-
-```go
-package main
-
-import (
-    "github.com/ethereum/go-ethereum/crypto"
-    "github.com/ethereum/go-ethereum/ethclient"
-    polymarketcontracts "github.com/ivanzzeth/predict-go-contracts"
-    "github.com/ivanzzeth/predict-go-contracts/signer"
-)
-
-func main() {
-    // Connect to Polygon RPC
-    client, _ := ethclient.Dial(os.Getenv("RPC_URL"))
-    chainID, _ := client.ChainID(context.Background())
-
-    // Load private key
-    privateKey, _ := crypto.HexToECDSA(os.Getenv("PRIVATE_KEY"))
-
-    // Create Safe signer
-    safeSigner, _ := signer.NewSafeTradingPrivateKeySigner(chainID, client, privateKey)
-
-    // Initialize contract interface
-    config := polymarketcontracts.GetContractConfig(big.NewInt(137))
-    polymarketInterface, _ := polymarketcontracts.NewContractInterface(
-        client,
-        polymarketcontracts.WithContractConfig(config),
-        polymarketcontracts.WithSafeSigner(safeSigner),
-    )
-
-    // Deploy Safe (first time only)
-    safeProxy, txHash, _ := polymarketInterface.DeploySafe()
-
-    // Enable trading through Safe
-    ctx := context.Background()
-    txHashes, _ := polymarketInterface.EnableTrading(ctx)
-}
-```
-
-## EOA vs Safe: Key Differences
-
-| Feature | EOA Signer | Safe Signer |
-|---------|-----------|-------------|
-| **Setup** | Direct private key usage | Requires Safe deployment |
-| **Owner Model** | Single private key | Single owner (via Safe proxy) |
-| **Transaction Cost** | Lower gas costs | Higher gas costs (Safe proxy) |
-| **Signing Method** | Standard transaction signing | EIP-712 typed data signatures |
-| **Primary Benefit** | Simplicity and low cost | Fund isolation & protocol abstraction |
-| **Use Case** | Direct wallet interaction | Isolated trading accounts |
-| **Recovery** | No built-in recovery | Owner can be changed if needed |
-
-### When to Use EOA Signer
-
-- Personal trading accounts
-- Quick prototyping and testing
-- Lower transaction costs are important
-- Direct wallet control is preferred
-
-### When to Use Safe Signer
-
-- **Fund Isolation**: Separate trading funds from main wallet
-- **Protocol Abstraction**: Simplified interaction with Polymarket contracts
-- **MPC Integration**: Use with MPC wallets (e.g., Cobo) for institutional security
-- **Account Management**: Easier to change ownership or upgrade
-- **Professional Trading**: Isolated accounts for different trading strategies
 
 ## Environment Variables
 
 ```bash
 # Required for all examples
-RPC_URL=https://polygon-rpc.com
+RPC_URL=https://bsc-dataseed1.binance.org
 PRIVATE_KEY=your_private_key_hex
 
 # Required for split/merge examples
-CONDITION_ID=0x... # The condition ID from Polymarket
-AMOUNT=100         # Amount in USDC (for split) or tokens (for merge)
-
-# Required for MPC examples
-COBO_PRIVATE_KEY=your_cobo_api_private_key
-COBO_WALLET_ID=your_cobo_wallet_id
-COBO_ADDRESS=your_mpc_wallet_address
-COBO_ENV=dev  # or 'prod'
+CONDITION_ID=0x... # The condition ID from Predict.fun
+AMOUNT=100         # Amount in USDT (for split) or tokens (for merge)
 ```
 
 ## Examples
@@ -151,36 +74,8 @@ For complete, runnable examples, see the [`examples/`](./examples) directory:
 ### EOA Examples
 
 - **[`enable_trading`](./examples/enable_trading)** - Enable trading for an EOA account
-  - Direct USDC and CTF token approvals
+  - Direct USDT and CTF token approvals
   - Simplest setup for individual traders
-
-### Safe Examples with Private Key
-
-- **[`deploy_safe`](./examples/deploy_safe)** - Deploy a new Gnosis Safe (single-owner)
-  - One-time setup for isolated trading account
-  - Creates a Safe proxy with single owner for fund isolation
-
-- **[`safe_enable_trading`](./examples/safe_enable_trading)** - Enable trading for a Safe wallet
-  - Configures all necessary token approvals through Safe
-  - Owner signs transactions via EIP-712
-
-- **[`safe_split_position`](./examples/safe_split_position)** - Split USDC into conditional tokens via Safe
-  - Locks USDC collateral and receives outcome tokens
-  - Demonstrates position creation through Safe
-
-- **[`safe_merge_positions`](./examples/safe_merge_positions)** - Merge conditional tokens back to USDC via Safe
-  - Burns all outcome tokens to unlock USDC
-  - Requires holding complete set of outcome tokens
-
-### Safe Examples with MPC (Cobo)
-
-- **[`deploy_safe_for_mpc`](./examples/deploy_safe_for_mpc)** - Deploy Safe using Cobo MPC wallet
-  - Single-owner Safe with MPC wallet as owner
-  - Institutional-grade key management
-
-- **[`enable_trading_for_mpc_safe`](./examples/enable_trading_for_mpc_safe)** - Enable trading for MPC Safe
-  - Complete MPC-based Safe trading setup
-  - Combines Safe fund isolation with MPC security
 
 ## Running Examples
 
@@ -191,83 +86,59 @@ For complete, runnable examples, see the [`examples/`](./examples) directory:
 cd examples/enable_trading
 
 # Set environment variables
-export RPC_URL=https://polygon-rpc.com
+export RPC_URL=https://bsc-dataseed1.binance.org
 export PRIVATE_KEY=your_private_key_hex
 
 # Run the example
 go run main.go
 ```
 
-### Split/Merge Examples
-
-```bash
-# Navigate to split position example
-cd examples/safe_split_position
-
-# Set environment variables
-export RPC_URL=https://polygon-rpc.com
-export PRIVATE_KEY=your_private_key_hex
-export CONDITION_ID=0x1234...  # Get from Polymarket market
-export AMOUNT=100               # 100 USDC to split
-
-# Run split
-go run main.go
-
-# Navigate to merge positions example
-cd ../safe_merge_positions
-
-# Set same environment variables
-# Run merge (requires holding all outcome tokens)
-go run main.go
-```
 
 ## Core Operations
 
 ### Enable Trading
 
-Sets up all required token approvals for trading on Polymarket:
-- USDC approvals for Exchange, NegRiskAdapter, and NegRiskExchange
+Sets up all required token approvals for trading on Predict.fun:
+- USDT approvals for Exchange, NegRiskAdapter, and NegRiskExchange
 - CTF token approvals for the same contracts
 
 ```go
-txHashes, err := polymarketInterface.EnableTrading(ctx)
+txHashes, err := predictInterface.EnableTrading(ctx)
 ```
 
 ### Split Position
 
-Split collateral tokens into conditional tokens. The partition parameter is automatically set to [1, 2] for Polymarket's binary markets (Yes/No outcomes):
+Split collateral tokens into conditional tokens. The partition parameter is automatically set to [1, 2] for Predict.fun's binary markets (Yes/No outcomes):
 
 ```go
-txHash, err := polymarketInterface.Split(ctx, conditionId, amount)
+txHash, err := predictInterface.Split(ctx, conditionId, amount)
 ```
 
 ### Merge Positions
 
-Merge conditional tokens back to collateral. The partition parameter is automatically set to [1, 2] for Polymarket's binary markets:
+Merge conditional tokens back to collateral. The partition parameter is automatically set to [1, 2] for Predict.fun's binary markets:
 
 ```go
-txHash, err := polymarketInterface.Merge(ctx, conditionId, amount)
+txHash, err := predictInterface.Merge(ctx, conditionId, amount)
 ```
 
 ### Redeem Positions
 
-Redeem conditional tokens after market resolution. The indexSets parameter is automatically set to [1, 2] for Polymarket's binary markets:
+Redeem conditional tokens after market resolution. The indexSets parameter is automatically set to [1, 2] for Predict.fun's binary markets:
 
 ```go
-txHash, err := polymarketInterface.Redeem(ctx, conditionId)
+txHash, err := predictInterface.Redeem(ctx, conditionId)
 ```
 
 ## Architecture
 
 ```
-polymarket-go-contracts/
+predict-go-contracts/
 ├── interface.go              # Main contract interface
 ├── config.go                 # Contract addresses and configs
 ├── types.go                  # Type definitions
 ├── signer/                   # Signing implementations
 │   ├── eoa_trading_signer.go     # EOA signer interface
-│   ├── safe_trading_signer.go    # Safe signer implementations
-│   ├── mpc_remote_signer.go      # Cobo MPC integration
 │   └── transaction_sender.go     # Transaction sending logic
 ├── sender/                   # Transaction sender interface
 ├── contracts/                # Generated contract bindings
@@ -276,8 +147,8 @@ polymarket-go-contracts/
 
 ## Supported Networks
 
-- **Polygon Mainnet** (Chain ID: 137)
-- **Polygon Amoy Testnet** (Chain ID: 80002)
+- **BNB Chain Mainnet** (Chain ID: 56)
+- **BNB Chain Testnet** (Chain ID: 97)
 
 Pre-configured contract addresses are available via `GetContractConfig()`.
 
@@ -285,9 +156,7 @@ Pre-configured contract addresses are available via `GetContractConfig()`.
 
 - **Private Keys**: Never commit private keys to version control
 - **Environment Variables**: Use `.env` files or secure secret management
-- **Safe Wallets**: Recommended for institutional use and large funds
-- **MPC Wallets**: Provide hardware-backed security for enterprise applications
-- **Transaction Inclusion**: The library automatically applies a 1.3x multiplier to suggested gas prices to improve transaction inclusion speed on Polygon network
+- **Transaction Inclusion**: The library automatically applies a 1.3x multiplier to suggested gas prices to improve transaction inclusion speed on BNB Chain
 - **Gas Estimation**: Always verify gas costs before mainnet deployment
 
 ## License
@@ -306,6 +175,4 @@ For issues and questions:
 
 ## Links
 
-- [Polymarket](https://polymarket.com/)
-- [Gnosis Safe](https://safe.global/)
-- [Cobo MPC WaaS](https://www.cobo.com/)
+- [Predict.fun](https://predict.fun/)
