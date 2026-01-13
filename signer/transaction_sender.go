@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/CoboGlobal/cobo-waas2-go-sdk/cobo_waas2"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,8 +16,6 @@ import (
 // GetTransactionSenderBySigner creates a TransactionSender based on the signer type
 func GetTransactionSenderBySigner(chainId *big.Int, client bind.ContractBackend, signerInstance any) (sender.TransactionSender, error) {
 	switch s := signerInstance.(type) {
-	case *CoboMpcSigner:
-		return GetTransactionSenderByCoboMpcTransactionSender(client, s)
 	case TransactionSignerAndAddrGetter:
 		return GetTransactionSenderByTransactionSignerAndAddrGetter(chainId, client, s)
 	default:
@@ -91,54 +88,4 @@ func (s *TransactionSenderByTransactionSigner) SendEthereumTransaction(to common
 	}
 
 	return signedTx.Hash(), nil
-}
-
-// CoboMpcTransactionSender implements TransactionSender using Cobo MPC wallet
-type CoboMpcTransactionSender struct {
-	client bind.ContractBackend
-	signer *CoboMpcSigner
-}
-
-// GetTransactionSenderByCoboMpcTransactionSender creates a TransactionSender for Cobo MPC
-func GetTransactionSenderByCoboMpcTransactionSender(client bind.ContractBackend, mpcSigner *CoboMpcSigner) (sender.TransactionSender, error) {
-	return &CoboMpcTransactionSender{client: client, signer: mpcSigner}, nil
-}
-
-// SendEthereumTransaction sends an Ethereum transaction using Cobo MPC wallet
-func (s *CoboMpcTransactionSender) SendEthereumTransaction(to common.Address, data []byte, value *big.Int) (common.Hash, error) {
-	// Get gas price and increase by 30% to improve transaction inclusion speed
-	gasPrice, err := s.client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	gasPrice.Mul(gasPrice, big.NewInt(13))
-	gasPrice.Div(gasPrice, big.NewInt(10))
-
-	gasLimit, err := s.client.EstimateGas(context.Background(), ethereum.CallMsg{
-		From:  s.signer.GetAddress(),
-		To:    &to,
-		Data:  data,
-		Value: value,
-	})
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	fee := cobo_waas2.NewTransactionRequestEvmLegacyFee(gasPrice.String(), cobo_waas2.FEETYPE_EVM_LEGACY, s.signer.CoboChainId())
-	fee.SetGasLimit(big.NewInt(int64(gasLimit)).String())
-
-	paramFee := cobo_waas2.TransactionRequestEvmLegacyFeeAsTransactionRequestFee(fee)
-
-	txResp, err := s.signer.CallContract(to.Hex(), fmt.Sprintf("0x%x", data), value.String(), &paramFee)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	txDetail, err := s.signer.WaitTransactionStatus(txResp.TransactionId, cobo_waas2.TRANSACTIONSTATUS_CONFIRMING, 100)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	txHash := common.HexToHash(*txDetail.TransactionHash)
-	return txHash, nil
 }
