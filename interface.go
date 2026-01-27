@@ -23,6 +23,7 @@ import (
 type BalanceAllowanceInfo struct {
 	Balance                    *big.Int
 	AllowanceExchange          *big.Int
+	AllowanceConditionalTokens *big.Int
 	AllowanceNegRiskAdapter    *big.Int
 	AllowanceNegRiskExchange   *big.Int
 	CTFApprovedExchange        bool
@@ -209,6 +210,12 @@ func (b *ContractInterface) CheckBalanceAndAllowanceAtBlock(ctx context.Context,
 	}
 	info.AllowanceExchange = allowanceExchange
 
+	allowanceConditionalTokens, err := b.collateralContract.Allowance(callOpts, address, b.contractConfig.ConditionalTokens)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collateral allowance for ConditionalTokens: %w", err)
+	}
+	info.AllowanceConditionalTokens = allowanceConditionalTokens
+
 	allowanceNegRiskAdapter, err := b.collateralContract.Allowance(callOpts, address, b.contractConfig.NegRiskAdapter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get collateral allowance for NegRiskAdapter: %w", err)
@@ -258,6 +265,7 @@ func (b *ContractInterface) PrintBalanceAndAllowance(ctx context.Context, addres
 	// Print Allowances
 	fmt.Println("Allowances:")
 	fmt.Printf("  Collateral → Exchange: %s\n", checkmark(info.AllowanceExchange.Cmp(big.NewInt(0)) > 0))
+	fmt.Printf("  Collateral → ConditionalTokens: %s\n", checkmark(info.AllowanceConditionalTokens.Cmp(big.NewInt(0)) > 0))
 	fmt.Printf("  Collateral → NegRiskAdapter: %s\n", checkmark(info.AllowanceNegRiskAdapter.Cmp(big.NewInt(0)) > 0))
 	fmt.Printf("  Collateral → NegRiskExchange: %s\n", checkmark(info.AllowanceNegRiskExchange.Cmp(big.NewInt(0)) > 0))
 	fmt.Printf("  CTF → Exchange: %s\n", checkmark(info.CTFApprovedExchange))
