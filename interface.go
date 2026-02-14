@@ -43,6 +43,15 @@ type ContractInterface struct {
 	exchangeContract          *exchange.Exchange
 	negRiskAdapterContract    *negriskadapter.NegRiskAdapter
 	negRiskContract           *negrisk.NegRisk
+
+	// NegRisk Exchange as exchange.Exchange (same ABI, for OrderFilled subscription)
+	negRiskExchangeContract *exchange.Exchange
+
+	// Yield Bearing contracts
+	ybConditionalTokensContract        *conditional_tokens.ConditionalTokens
+	ybExchangeContract                 *exchange.Exchange
+	ybNegRiskConditionalTokensContract *conditional_tokens.ConditionalTokens
+	ybNegRiskExchangeContract          *exchange.Exchange
 }
 
 type ContractInterfaceConfig struct {
@@ -120,10 +129,40 @@ func NewContractInterface(
 		return nil, fmt.Errorf("failed to setup NegRiskAdapter: %w", err)
 	}
 
-	// Initialize NegRisk Exchange contract
+	// Initialize NegRisk Exchange contract (negrisk.NegRisk binding)
 	negRiskContract, err := negrisk.NewNegRisk(defaultOptions.ContractConfig.NegRiskExchange, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup NegRisk: %w", err)
+	}
+
+	// Initialize NegRisk Exchange as exchange.Exchange (same ABI, for OrderFilled subscription)
+	negRiskExchangeContract, err := exchange.NewExchange(defaultOptions.ContractConfig.NegRiskExchange, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup NegRiskExchange (as Exchange): %w", err)
+	}
+
+	// Initialize Yield Bearing ConditionalTokens contract (same ABI as ConditionalTokens)
+	ybCtfContract, err := conditional_tokens.NewConditionalTokens(defaultOptions.ContractConfig.YieldBearingConditionalTokens, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup YieldBearingConditionalTokens: %w", err)
+	}
+
+	// Initialize Yield Bearing Exchange contract (same ABI as Exchange)
+	ybExchangeContract, err := exchange.NewExchange(defaultOptions.ContractConfig.YieldBearingExchange, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup YieldBearingExchange: %w", err)
+	}
+
+	// Initialize Yield Bearing NegRisk ConditionalTokens contract (same ABI as ConditionalTokens)
+	ybNegRiskCtfContract, err := conditional_tokens.NewConditionalTokens(defaultOptions.ContractConfig.YieldBearingNegRiskConditionalTokens, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup YieldBearingNegRiskConditionalTokens: %w", err)
+	}
+
+	// Initialize Yield Bearing NegRisk Exchange contract (same ABI as Exchange)
+	ybNegRiskExchangeContract, err := exchange.NewExchange(defaultOptions.ContractConfig.YieldBearingNegRiskExchange, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup YieldBearingNegRiskExchange: %w", err)
 	}
 
 	return &ContractInterface{
@@ -138,6 +177,12 @@ func NewContractInterface(
 		exchangeContract:          exchangeContract,
 		negRiskAdapterContract:    negRiskAdapterContract,
 		negRiskContract:           negRiskContract,
+
+		negRiskExchangeContract:            negRiskExchangeContract,
+		ybConditionalTokensContract:        ybCtfContract,
+		ybExchangeContract:                 ybExchangeContract,
+		ybNegRiskConditionalTokensContract: ybNegRiskCtfContract,
+		ybNegRiskExchangeContract:          ybNegRiskExchangeContract,
 	}, nil
 }
 
@@ -164,6 +209,31 @@ func (b *ContractInterface) GetNegRiskAdapter() *negriskadapter.NegRiskAdapter {
 // GetNegRisk returns the NegRisk Exchange contract instance
 func (b *ContractInterface) GetNegRisk() *negrisk.NegRisk {
 	return b.negRiskContract
+}
+
+// GetNegRiskExchange returns the NegRisk Exchange contract instance (as exchange.Exchange for OrderFilled subscription)
+func (b *ContractInterface) GetNegRiskExchange() *exchange.Exchange {
+	return b.negRiskExchangeContract
+}
+
+// GetYBConditionalTokens returns the Yield Bearing ConditionalTokens contract instance
+func (b *ContractInterface) GetYBConditionalTokens() *conditional_tokens.ConditionalTokens {
+	return b.ybConditionalTokensContract
+}
+
+// GetYBExchange returns the Yield Bearing Exchange contract instance
+func (b *ContractInterface) GetYBExchange() *exchange.Exchange {
+	return b.ybExchangeContract
+}
+
+// GetYBNegRiskConditionalTokens returns the Yield Bearing NegRisk ConditionalTokens contract instance
+func (b *ContractInterface) GetYBNegRiskConditionalTokens() *conditional_tokens.ConditionalTokens {
+	return b.ybNegRiskConditionalTokensContract
+}
+
+// GetYBNegRiskExchange returns the Yield Bearing NegRisk Exchange contract instance
+func (b *ContractInterface) GetYBNegRiskExchange() *exchange.Exchange {
+	return b.ybNegRiskExchangeContract
 }
 
 // GetConfig returns the contract configuration
