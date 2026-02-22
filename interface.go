@@ -357,6 +357,7 @@ func (b *ContractInterface) EnableTrading(ctx context.Context) ([]common.Hash, e
 	fmt.Println("Enabling trading for Non Yield Bearing (NYB) contracts...")
 	nybTxHashes, err := b.enableTradingForContracts(ctx,
 		b.contractConfig.ConditionalTokens,
+		b.contractConfig.NegRiskConditionalTokens,
 		b.contractConfig.Exchange,
 		b.contractConfig.NegRiskAdapter,
 		b.contractConfig.NegRiskExchange,
@@ -370,6 +371,7 @@ func (b *ContractInterface) EnableTrading(ctx context.Context) ([]common.Hash, e
 	fmt.Println("Enabling trading for Yield Bearing (YB) contracts...")
 	ybTxHashes, err := b.enableTradingForContracts(ctx,
 		b.contractConfig.YieldBearingConditionalTokens,
+		b.contractConfig.YieldBearingNegRiskConditionalTokens,
 		b.contractConfig.YieldBearingExchange,
 		b.contractConfig.YieldBearingNegRiskAdapter,
 		b.contractConfig.YieldBearingNegRiskExchange,
@@ -426,12 +428,14 @@ func (b *ContractInterface) MergeNegRisk(ctx context.Context, negRiskAdapterAddr
 
 // enableTradingForContracts is an internal helper that enables trading for a specific set of contracts
 // ctfAddress: ConditionalTokens contract (YB or NYB)
+// negRiskCTFAddress: NegRiskConditionalTokens contract (YB or NYB) — used by NegRisk markets
 // exchangeAddress: Exchange contract
 // negRiskAdapterAddress: NegRiskAdapter contract
 // negRiskExchangeAddress: NegRiskExchange contract
 func (b *ContractInterface) enableTradingForContracts(
 	ctx context.Context,
 	ctfAddress common.Address,
+	negRiskCTFAddress common.Address,
 	exchangeAddress common.Address,
 	negRiskAdapterAddress common.Address,
 	negRiskExchangeAddress common.Address,
@@ -601,6 +605,61 @@ func (b *ContractInterface) enableTradingForContracts(
 		txHashes = append(txHashes, txHash)
 	} else {
 		fmt.Printf("  CTF → NegRiskExchange: already approved\n")
+	}
+
+	// =====================================================================
+	// NegRisk ConditionalTokens approvals
+	// NegRisk markets use a separate ConditionalTokens contract (NegRiskCTF).
+	// The NegRiskAdapter needs approval on NegRiskCTF to transfer ERC1155
+	// tokens during merge/redeem operations.
+	// =====================================================================
+	if negRiskCTFAddress != ctfAddress {
+		negRiskCTFContract, err := conditional_tokens.NewConditionalTokens(negRiskCTFAddress, b.client)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create NegRiskCTF contract instance: %w", err)
+		}
+
+		// Check and approve NegRiskCTF for NegRiskAdapter
+		negRiskCTFApprovedAdapter, err := negRiskCTFContract.IsApprovedForAll(callOpts, eoaAddr, negRiskAdapterAddress)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check NegRiskCTF approval for NegRiskAdapter: %w", err)
+		}
+		if !negRiskCTFApprovedAdapter {
+			setApprovalData, err := ctfABI.Pack("setApprovalForAll", negRiskAdapterAddress, true)
+			if err != nil {
+				return nil, fmt.Errorf("failed to pack setApprovalForAll data for NegRiskCTF → NegRiskAdapter: %w", err)
+			}
+			txHash, err := b.txSender.SendEthereumTransaction(negRiskCTFAddress, setApprovalData, big.NewInt(0))
+			if err != nil {
+				return nil, fmt.Errorf("failed to send NegRiskCTF → NegRiskAdapter approval transaction: %w", err)
+			}
+			fmt.Printf("  NegRiskCTF → NegRiskAdapter: %s\n", txHash.Hex())
+			txHashes = append(txHashes, txHash)
+		} else {
+			fmt.Printf("  NegRiskCTF → NegRiskAdapter: already approved\n")
+		}
+
+		// Check and approve NegRiskCTF for NegRiskExchange
+		negRiskCTFApprovedExchange, err := negRiskCTFContract.IsApprovedForAll(callOpts, eoaAddr, negRiskExchangeAddress)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check NegRiskCTF approval for NegRiskExchange: %w", err)
+		}
+		if !negRiskCTFApprovedExchange {
+			setApprovalData, err := ctfABI.Pack("setApprovalForAll", negRiskExchangeAddress, true)
+			if err != nil {
+				return nil, fmt.Errorf("failed to pack setApprovalForAll data for NegRiskCTF → NegRiskExchange: %w", err)
+			}
+			txHash, err := b.txSender.SendEthereumTransaction(negRiskCTFAddress, setApprovalData, big.NewInt(0))
+			if err != nil {
+				return nil, fmt.Errorf("failed to send NegRiskCTF → NegRiskExchange approval transaction: %w", err)
+			}
+			fmt.Printf("  NegRiskCTF → NegRiskExchange: %s\n", txHash.Hex())
+			txHashes = append(txHashes, txHash)
+		} else {
+			fmt.Printf("  NegRiskCTF → NegRiskExchange: already approved\n")
+		}
+	} else {
+		fmt.Printf("  NegRiskCTF: same as CTF, skipping duplicate approvals\n")
 	}
 
 	return txHashes, nil
