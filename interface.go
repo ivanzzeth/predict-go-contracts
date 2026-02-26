@@ -15,6 +15,7 @@ import (
 	"github.com/ivanzzeth/predict-go-contracts/contracts/exchange"
 	negrisk "github.com/ivanzzeth/predict-go-contracts/contracts/neg-risk"
 	negriskadapter "github.com/ivanzzeth/predict-go-contracts/contracts/neg-risk-adapter"
+	ybnegriskadapter "github.com/ivanzzeth/predict-go-contracts/contracts/yb-neg-risk-adapter"
 	"github.com/ivanzzeth/predict-go-contracts/sender"
 	"github.com/ivanzzeth/predict-go-contracts/signer"
 )
@@ -52,6 +53,7 @@ type ContractInterface struct {
 	ybExchangeContract                 *exchange.Exchange
 	ybNegRiskConditionalTokensContract *conditional_tokens.ConditionalTokens
 	ybNegRiskExchangeContract          *exchange.Exchange
+	ybNegRiskAdapterContract           *ybnegriskadapter.YBNegRiskAdapter
 }
 
 type ContractInterfaceConfig struct {
@@ -165,6 +167,12 @@ func NewContractInterface(
 		return nil, fmt.Errorf("failed to setup YieldBearingNegRiskExchange: %w", err)
 	}
 
+	// Initialize Yield Bearing NegRisk Adapter (emits Split/Merge/Redeem for YB NegRisk markets)
+	ybNegRiskAdapterContract, err := ybnegriskadapter.NewYBNegRiskAdapter(defaultOptions.ContractConfig.YieldBearingNegRiskAdapter, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup YieldBearingNegRiskAdapter: %w", err)
+	}
+
 	return &ContractInterface{
 		chainID:          chainID,
 		client:           client,
@@ -183,6 +191,7 @@ func NewContractInterface(
 		ybExchangeContract:                 ybExchangeContract,
 		ybNegRiskConditionalTokensContract: ybNegRiskCtfContract,
 		ybNegRiskExchangeContract:          ybNegRiskExchangeContract,
+		ybNegRiskAdapterContract:           ybNegRiskAdapterContract,
 	}, nil
 }
 
@@ -234,6 +243,12 @@ func (b *ContractInterface) GetYBNegRiskConditionalTokens() *conditional_tokens.
 // GetYBNegRiskExchange returns the Yield Bearing NegRisk Exchange contract instance
 func (b *ContractInterface) GetYBNegRiskExchange() *exchange.Exchange {
 	return b.ybNegRiskExchangeContract
+}
+
+// GetYBNegRiskAdapter returns the Yield Bearing NegRisk Adapter contract instance.
+// For YB NegRisk markets, Split/Merge/Redeem events are emitted by this adapter, not by YBNegRiskConditionalTokens.
+func (b *ContractInterface) GetYBNegRiskAdapter() *ybnegriskadapter.YBNegRiskAdapter {
+	return b.ybNegRiskAdapterContract
 }
 
 // GetConfig returns the contract configuration
