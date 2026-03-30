@@ -111,7 +111,7 @@ func (s *CoboMpcTransactionSender) SendEthereumTransaction(to common.Address, da
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to get gas price: %w", err)
 	}
-	gasPrice.Mul(gasPrice, big.NewInt(13))
+	gasPrice.Mul(gasPrice, big.NewInt(18))
 	gasPrice.Div(gasPrice, big.NewInt(10))
 
 	gasLimit, err := s.client.EstimateGas(context.Background(), ethereum.CallMsg{
